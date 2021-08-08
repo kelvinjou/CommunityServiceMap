@@ -51,8 +51,9 @@ public class MapBoxView extends AppCompatActivity implements PermissionsListener
     private MapView mapView;
     private MapboxMap mapboxMap;
     private PermissionsManager permissionsManager;
+    private LocationComponent locationComponent;
     private LocationEngine locationEngine;
-    private Location originLocation;
+//    private Location originLocation;
 //    this is just the icon ID, not the actual image file name
     private static final String ID_ICON_PLACEMARK = "annotation";
 
@@ -68,77 +69,71 @@ public class MapBoxView extends AppCompatActivity implements PermissionsListener
         Mapbox.getInstance(this, PUBLIC_ACCESS_TOKEN);
 
         setContentView(R.layout.activity_map_box_view);
-        if (PermissionsManager.areLocationPermissionsGranted(this)) {
-            mapView = (MapView) findViewById(R.id.mapView);
-            mapView.onCreate(savedInstanceState);
-            mapView.getMapAsync(new OnMapReadyCallback() {
-                @Override
-                public void onMapReady(@NonNull MapboxMap mapboxMap) {
-
-                    mapboxMap.setStyle(Style.TRAFFIC_NIGHT, new Style.OnStyleLoaded() {
-                        @Override
-                        public void onStyleLoaded(@NonNull Style style) {
-                            // Map is set up and the style has loaded. Now you can add data or make other map adjustments
-                            SymbolManager symbolManager = new SymbolManager(mapView, mapboxMap, style);
-                            symbolManager.addClickListener(new OnSymbolClickListener() {
-                                @Override
-                                public boolean onAnnotationClick(Symbol symbol) {
-                                    throw new RuntimeException();
-                                }
-                            });
-
-                            // Set non-data-driven properties.
-                            symbolManager.setIconAllowOverlap(true);
-                            symbolManager.setIconTranslate(new Float[]{-4f, 5f});
-                            symbolManager.setIconRotationAlignment(ICON_ROTATION_ALIGNMENT_VIEWPORT);
-
-                            // Create symbol at specified location
-                            SymbolOptions symbolOptions = new SymbolOptions()
-                                    .withLatLng(new LatLng(37.6213, -122.3790))
-                                    .withIconImage(ID_ICON_PLACEMARK)
-                                    .withIconSize(1.3f)
-                                    .withIconOffset(new Float[]{5.0f, -12.0f});
-
-
-
-                            // Get the actual image from @drawable and slap it on our map style
-                            addAirplaneImageToStyle(style);
-
-                            // Use manager to draw the symbol
-                            symbolManager.create(symbolOptions);
-                        }
-                    });
-                }
-            });
-        } else {
-            permissionsManager = new PermissionsManager(this);
-            permissionsManager.requestLocationPermissions(this);
-        }
+//        if (PermissionsManager.areLocationPermissionsGranted(this)) {
+//            mapView = (MapView) findViewById(R.id.mapView);
+//            mapView.onCreate(savedInstanceState);
+//            mapView.getMapAsync(this::onMapReady);
+//
+//            } else {
+//            permissionsManager = new PermissionsManager(this);
+//            permissionsManager.requestLocationPermissions(this);
+//        }
+        mapView = findViewById(R.id.mapView);
+        mapView.onCreate(savedInstanceState);
+        mapView.getMapAsync(this::onMapReady);
     }
 
 
-    @SuppressWarnings( {"MissingPermission"})
+    public void onMapReady(@NonNull MapboxMap mapboxMap) {
+        this.mapboxMap = mapboxMap;
+        mapboxMap.setStyle(Style.TRAFFIC_DAY, new Style.OnStyleLoaded() {
+            @Override
+            public void onStyleLoaded(@NonNull Style style) {
+                enableLocationComponent(style);
+                // Map is set up and the style has loaded. Now you can add data or make other map adjustments
+                SymbolManager symbolManager = new SymbolManager(mapView, mapboxMap, style);
+                symbolManager.addClickListener(new OnSymbolClickListener() {
+                    @Override
+                    public boolean onAnnotationClick(Symbol symbol) {
+                        throw new RuntimeException();
+                    }
+                });
+
+                // Set non-data-driven properties.
+                symbolManager.setIconAllowOverlap(true);
+                symbolManager.setIconTranslate(new Float[]{-4f, 5f});
+                symbolManager.setIconRotationAlignment(ICON_ROTATION_ALIGNMENT_VIEWPORT);
+
+                // Create symbol at specified location
+                SymbolOptions symbolOptions = new SymbolOptions()
+                        .withLatLng(new LatLng(37.6213, -122.3790))
+                        .withIconImage(ID_ICON_PLACEMARK)
+                        .withIconSize(1.3f)
+                        .withIconOffset(new Float[]{5.0f, -12.0f});
+
+
+
+                // Get the actual image from @drawable and slap it on our map style
+                addAirplaneImageToStyle(style);
+
+                // Use manager to draw the symbol
+                symbolManager.create(symbolOptions);
+            }
+        });
+    }
+
+
+//    @SuppressWarnings( {"MissingPermission"})
     private void enableLocationComponent(@NonNull Style loadedMapStyle) {
         if (PermissionsManager.areLocationPermissionsGranted(this)) {
-            LocationComponent locationComponent = mapboxMap.getLocationComponent();
 
-//            set the location component activation options
-            LocationComponentActivationOptions locationComponentActivationOptions =
-                    LocationComponentActivationOptions.builder(this, loadedMapStyle)
-                    .useDefaultLocationEngine(false)
-                    .build();
-            // Activate with the LocationComponentActivationOptions object
-            locationComponent.activateLocationComponent(locationComponentActivationOptions);
 
-// Enable to make component visible
+            locationComponent = mapboxMap.getLocationComponent();
+            locationComponent.activateLocationComponent(this, loadedMapStyle);
             locationComponent.setLocationComponentEnabled(true);
-
-// Set the component's camera mode
-            locationComponent.setCameraMode(CameraMode.TRACKING);
-
-// Set the component's render mode
-            locationComponent.setRenderMode(RenderMode.COMPASS);
-
+//            set the location component activation options
+            locationComponent.setCameraMode(CameraMode.TRACKING_GPS);
+            locationComponent.setRenderMode(RenderMode.GPS);
             initLocationEngine();
         } else {
             permissionsManager = new PermissionsManager(this);
@@ -158,10 +153,10 @@ public class MapBoxView extends AppCompatActivity implements PermissionsListener
 //        locationEngine.getLastLocation(callback);
     }
 
+    @SuppressLint("MissingSuperCall")
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-//        permissionsManager.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        permissionsManager.onRequestPermissionsResult(requestCode, permissions, grantResults);
     }
 
     @Override
@@ -173,11 +168,13 @@ public class MapBoxView extends AppCompatActivity implements PermissionsListener
     public void onPermissionResult(boolean granted) {
         if (granted) {
             if (mapboxMap.getStyle() != null) {
+                // Permission sensitive logic called here, such as activating the Maps SDK's LocationComponent to show the device's location
                 enableLocationComponent(mapboxMap.getStyle());
             }
-            // Permission sensitive logic called here, such as activating the Maps SDK's LocationComponent to show the device's location
+
         } else {
-            throw new RuntimeException();
+            Toast.makeText(this, "AHHHHHHHH", Toast.LENGTH_LONG).show();
+            finish();
 
         }
     }
@@ -253,3 +250,4 @@ public class MapBoxView extends AppCompatActivity implements PermissionsListener
         mapView.onDestroy();
     }
 }
+
