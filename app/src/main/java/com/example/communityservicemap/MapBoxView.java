@@ -4,9 +4,14 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.annotation.SuppressLint;
+import android.app.Activity;
+import android.content.Intent;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Color;
 import android.location.Location;
 import android.os.Bundle;
+import android.view.View;
 import android.widget.Toast;
 
 import com.mapbox.android.core.location.LocationEngine;
@@ -18,8 +23,12 @@ import com.mapbox.api.geocoding.v5.GeocodingCriteria;
 import com.mapbox.api.geocoding.v5.MapboxGeocoding;
 import com.mapbox.api.geocoding.v5.models.CarmenFeature;
 import com.mapbox.api.geocoding.v5.models.GeocodingResponse;
+import com.mapbox.geojson.Feature;
+import com.mapbox.geojson.FeatureCollection;
 import com.mapbox.geojson.Point;
 import com.mapbox.mapboxsdk.Mapbox;
+import com.mapbox.mapboxsdk.camera.CameraPosition;
+import com.mapbox.mapboxsdk.camera.CameraUpdateFactory;
 import com.mapbox.mapboxsdk.geometry.LatLng;
 import com.mapbox.mapboxsdk.location.LocationComponent;
 import com.mapbox.mapboxsdk.location.LocationComponentActivationOptions;
@@ -34,25 +43,36 @@ import com.mapbox.mapboxsdk.plugins.annotation.OnSymbolClickListener;
 import com.mapbox.mapboxsdk.plugins.annotation.Symbol;
 import com.mapbox.mapboxsdk.plugins.annotation.SymbolManager;
 import com.mapbox.mapboxsdk.plugins.annotation.SymbolOptions;
+import com.mapbox.mapboxsdk.plugins.places.autocomplete.PlaceAutocomplete;
+import com.mapbox.mapboxsdk.plugins.places.autocomplete.model.PlaceOptions;
 import com.mapbox.mapboxsdk.style.layers.Property;
+import com.mapbox.mapboxsdk.style.layers.SymbolLayer;
+import com.mapbox.mapboxsdk.style.sources.GeoJsonSource;
 import com.mapbox.mapboxsdk.utils.BitmapUtils;
-
+import static com.mapbox.mapboxsdk.style.layers.PropertyFactory.iconImage;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
+import java.util.Objects;
 
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
 
 import static com.mapbox.mapboxsdk.style.layers.Property.ICON_ROTATION_ALIGNMENT_VIEWPORT;
+import static com.mapbox.mapboxsdk.style.layers.PropertyFactory.iconOffset;
 
 public class MapBoxView extends AppCompatActivity implements PermissionsListener {
+    private static final int REQUEST_CODE_AUTOCOMPLETE = 1;
+    private String geojsonSourceLayerId = "geojsonSourceLayerId";
+    private String symbolIconId = "symbolIconId";
     private MapView mapView;
     private MapboxMap mapboxMap;
     private PermissionsManager permissionsManager;
     private LocationComponent locationComponent;
     private LocationEngine locationEngine;
+    private CarmenFeature home;
+    private CarmenFeature work;
 //    private Location originLocation;
 //    this is just the icon ID, not the actual image file name
     private static final String ID_ICON_PLACEMARK = "annotation";
@@ -69,15 +89,6 @@ public class MapBoxView extends AppCompatActivity implements PermissionsListener
         Mapbox.getInstance(this, PUBLIC_ACCESS_TOKEN);
 
         setContentView(R.layout.activity_map_box_view);
-//        if (PermissionsManager.areLocationPermissionsGranted(this)) {
-//            mapView = (MapView) findViewById(R.id.mapView);
-//            mapView.onCreate(savedInstanceState);
-//            mapView.getMapAsync(this::onMapReady);
-//
-//            } else {
-//            permissionsManager = new PermissionsManager(this);
-//            permissionsManager.requestLocationPermissions(this);
-//        }
         mapView = findViewById(R.id.mapView);
         mapView.onCreate(savedInstanceState);
         mapView.getMapAsync(this::onMapReady);
@@ -90,15 +101,24 @@ public class MapBoxView extends AppCompatActivity implements PermissionsListener
             @Override
             public void onStyleLoaded(@NonNull Style style) {
                 enableLocationComponent(style);
+
+                initSearchFab();
+
+                // Add the symbol layer icon to map for future use
+                style.addImage(ID_ICON_PLACEMARK,
+                        Objects.requireNonNull(BitmapUtils.getBitmapFromDrawable(getResources().getDrawable(R.drawable.ic_baseline_place_24))));
+                setUpSource(style);
+//                setupLayer(style);
+
                 // Map is set up and the style has loaded. Now you can add data or make other map adjustments
                 SymbolManager symbolManager = new SymbolManager(mapView, mapboxMap, style);
+
                 symbolManager.addClickListener(new OnSymbolClickListener() {
                     @Override
                     public boolean onAnnotationClick(Symbol symbol) {
                         throw new RuntimeException();
                     }
                 });
-
                 // Set non-data-driven properties.
                 symbolManager.setIconAllowOverlap(true);
                 symbolManager.setIconTranslate(new Float[]{-4f, 5f});
@@ -110,14 +130,13 @@ public class MapBoxView extends AppCompatActivity implements PermissionsListener
                         .withIconImage(ID_ICON_PLACEMARK)
                         .withIconSize(1.3f)
                         .withIconOffset(new Float[]{5.0f, -12.0f});
-
-
-
                 // Get the actual image from @drawable and slap it on our map style
                 addAirplaneImageToStyle(style);
 
                 // Use manager to draw the symbol
                 symbolManager.create(symbolOptions);
+
+
             }
         });
     }
@@ -132,8 +151,8 @@ public class MapBoxView extends AppCompatActivity implements PermissionsListener
             locationComponent.activateLocationComponent(this, loadedMapStyle);
             locationComponent.setLocationComponentEnabled(true);
 //            set the location component activation options
-            locationComponent.setCameraMode(CameraMode.TRACKING_GPS);
-            locationComponent.setRenderMode(RenderMode.GPS);
+            locationComponent.setCameraMode(CameraMode.TRACKING);
+            locationComponent.setRenderMode(RenderMode.COMPASS);
             initLocationEngine();
         } else {
             permissionsManager = new PermissionsManager(this);
@@ -180,7 +199,7 @@ public class MapBoxView extends AppCompatActivity implements PermissionsListener
     }
     private void addAirplaneImageToStyle(Style style) {
         style.addImage(ID_ICON_PLACEMARK,
-                BitmapUtils.getBitmapFromDrawable(getResources().getDrawable(R.drawable.ic_baseline_place_24)), true);
+                BitmapUtils.getBitmapFromDrawable(getResources().getDrawable(R.drawable.ic_baseline_airplanemode_active_24)), true);
     }
 
     private void reverseGeocodeFunc(LatLng point, int c) {
@@ -208,6 +227,58 @@ public class MapBoxView extends AppCompatActivity implements PermissionsListener
             }
         });
     }
+
+    private void initSearchFab() {
+        findViewById(R.id.fab_location_search).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent intent = new PlaceAutocomplete.IntentBuilder()
+                        .accessToken(Mapbox.getAccessToken() != null ? Mapbox.getAccessToken() : PUBLIC_ACCESS_TOKEN)
+                        .placeOptions(PlaceOptions.builder()
+                        .backgroundColor(Color.parseColor("#EEEEEE"))
+                                .limit(10)
+//                                .addInjectedFeature(home)
+//                                .addInjectedFeature(work)
+                                .build(PlaceOptions.MODE_CARDS))
+                        .build(MapBoxView.this);
+                startActivityForResult(intent, REQUEST_CODE_AUTOCOMPLETE);
+
+            }
+        });
+    }
+//    geojsonSourceLayerId value is passed from onActivityResult
+    private void setUpSource(@NonNull Style loadedMapStyle) {
+        loadedMapStyle.addSource(new GeoJsonSource(geojsonSourceLayerId));
+    }
+
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (resultCode == Activity.RESULT_OK && requestCode == REQUEST_CODE_AUTOCOMPLETE) {
+            CarmenFeature selectedCarmenFeature = PlaceAutocomplete.getPlace(data);
+
+            if (mapboxMap != null) {
+                Style style = mapboxMap.getStyle();
+                if (style != null) {
+                    GeoJsonSource source = style.getSourceAs(geojsonSourceLayerId);
+                    if (source != null) {
+                        source.setGeoJson(FeatureCollection.fromFeatures(
+                                new Feature[] {Feature.fromJson(selectedCarmenFeature.toJson())}
+                        ));
+                    }
+
+                    mapboxMap.animateCamera(CameraUpdateFactory.newCameraPosition(
+                            new CameraPosition.Builder()
+                                    .target(new LatLng(((Point) selectedCarmenFeature.geometry()).latitude(),
+                                            ((Point) selectedCarmenFeature.geometry()).longitude()))
+                                    .zoom(14)
+                                    .build()), 4000);
+                }
+            }
+        }
+    }
+
     @Override
     protected void onStart() {
         super.onStart();
