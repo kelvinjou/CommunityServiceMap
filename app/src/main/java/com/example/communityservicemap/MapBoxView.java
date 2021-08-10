@@ -107,8 +107,6 @@ public class MapBoxView extends AppCompatActivity implements PermissionsListener
                 // Add the symbol layer icon to map for future use
                 style.addImage(ID_ICON_PLACEMARK,
                         Objects.requireNonNull(BitmapUtils.getBitmapFromDrawable(getResources().getDrawable(R.drawable.ic_baseline_place_24))));
-                setUpSource(style);
-//                setupLayer(style);
 
                 // Map is set up and the style has loaded. Now you can add data or make other map adjustments
                 SymbolManager symbolManager = new SymbolManager(mapView, mapboxMap, style);
@@ -202,32 +200,6 @@ public class MapBoxView extends AppCompatActivity implements PermissionsListener
                 BitmapUtils.getBitmapFromDrawable(getResources().getDrawable(R.drawable.ic_baseline_airplanemode_active_24)), true);
     }
 
-    private void reverseGeocodeFunc(LatLng point, int c) {
-        MapboxGeocoding reverseGeocode = MapboxGeocoding.builder()
-                .accessToken(PUBLIC_ACCESS_TOKEN)
-                .query(Point.fromLngLat(point.getLongitude(), point.getLatitude()))
-                .geocodingTypes(GeocodingCriteria.TYPE_ADDRESS)
-                .build();
-        reverseGeocode.enqueueCall(new Callback<GeocodingResponse>() {
-            @Override
-            public void onResponse(Call<GeocodingResponse> call, Response<GeocodingResponse> response) {
-                List<CarmenFeature> results = response.body().features();
-                if (results.size() > 0) {
-                    CarmenFeature feature;
-                    Point firstResultPoint = results.get(0).center();
-                    feature = results.get(0);
-
-
-                }
-            }
-
-            @Override
-            public void onFailure(Call<GeocodingResponse> call, Throwable t) {
-
-            }
-        });
-    }
-
     private void initSearchFab() {
         findViewById(R.id.fab_location_search).setOnClickListener(new View.OnClickListener() {
             @Override
@@ -241,16 +213,13 @@ public class MapBoxView extends AppCompatActivity implements PermissionsListener
 //                                .addInjectedFeature(work)
                                 .build(PlaceOptions.MODE_CARDS))
                         .build(MapBoxView.this);
+
+//                Runs method below: onActivityResult
                 startActivityForResult(intent, REQUEST_CODE_AUTOCOMPLETE);
 
             }
         });
     }
-//    geojsonSourceLayerId value is passed from onActivityResult
-    private void setUpSource(@NonNull Style loadedMapStyle) {
-        loadedMapStyle.addSource(new GeoJsonSource(geojsonSourceLayerId));
-    }
-
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
@@ -272,7 +241,7 @@ public class MapBoxView extends AppCompatActivity implements PermissionsListener
                             new CameraPosition.Builder()
                                     .target(new LatLng(((Point) selectedCarmenFeature.geometry()).latitude(),
                                             ((Point) selectedCarmenFeature.geometry()).longitude()))
-                                    .zoom(14)
+                                    .zoom(8)
                                     .build()), 4000);
                 }
             }
