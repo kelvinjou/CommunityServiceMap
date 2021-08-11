@@ -14,6 +14,7 @@ import android.os.Bundle;
 import android.view.View;
 import android.widget.Toast;
 
+import com.google.firebase.firestore.FirebaseFirestore;
 import com.mapbox.android.core.location.LocationEngine;
 import com.mapbox.android.core.location.LocationEngineProvider;
 import com.mapbox.android.core.location.LocationEngineRequest;
@@ -73,7 +74,6 @@ public class MapBoxView extends AppCompatActivity implements PermissionsListener
     private LocationEngine locationEngine;
     private CarmenFeature home;
     private CarmenFeature work;
-//    private Location originLocation;
 //    this is just the icon ID, not the actual image file name
     private static final String ID_ICON_PLACEMARK = "annotation";
 
@@ -87,6 +87,7 @@ public class MapBoxView extends AppCompatActivity implements PermissionsListener
 // retrieving public access token from string resources
 //        Mapbox.getInstance(this, getString(R.string.mapbox_access_token));
         Mapbox.getInstance(this, PUBLIC_ACCESS_TOKEN);
+
 
         setContentView(R.layout.activity_map_box_view);
         mapView = findViewById(R.id.mapView);
