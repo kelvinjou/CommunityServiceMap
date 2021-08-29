@@ -64,6 +64,10 @@ public class FirestoreActions {
                         }
                     }
                 });
+    }
+
+    public void update() {
+//        db.collection("users").document("");
 
     }
 }
